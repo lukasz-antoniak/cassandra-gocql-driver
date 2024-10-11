@@ -2412,6 +2412,46 @@ func TestGetColumnMetadata(t *testing.T) {
 	}
 }
 
+func TestViewMetadata(t *testing.T) {
+	session := createSession(t)
+	defer session.Close()
+	createViews(t, session)
+
+	views, err := getViewsMetadata(session, "gocql_test")
+	if err != nil {
+		t.Fatalf("failed to query view metadata with err: %v", err)
+	}
+	if views == nil {
+		t.Fatal("failed to query view metadata, nil returned")
+	}
+
+	if len(views) != 1 {
+		t.Fatal("expected one view")
+	}
+
+	textType := TypeText
+	if flagCassVersion.Before(3, 0, 0) {
+		textType = TypeVarchar
+	}
+
+	protoVer := byte(session.cfg.ProtoVersion)
+	expectedView := ViewMetadata{
+		Keyspace:   "gocql_test",
+		Name:       "basicview",
+		FieldNames: []string{"birthday", "nationality", "weight", "height"},
+		FieldTypes: []TypeInfo{
+			NativeType{typ: TypeTimestamp, proto: protoVer},
+			NativeType{typ: textType, proto: protoVer},
+			NativeType{typ: textType, proto: protoVer},
+			NativeType{typ: textType, proto: protoVer},
+		},
+	}
+
+	if !reflect.DeepEqual(views[0], expectedView) {
+		t.Fatalf("view is %+v, but expected %+v", views[0], expectedView)
+	}
+}
+
 func TestMaterializedViewMetadata(t *testing.T) {
 	if flagCassVersion.Before(3, 0, 0) {
 		t.Skip("The Cassandra version is too old")
@@ -2516,18 +2556,19 @@ func TestAggregateMetadata(t *testing.T) {
 		t.Fatal("expected two aggregates")
 	}
 
+	protoVer := byte(session.cfg.ProtoVersion)
 	expectedAggregrate := AggregateMetadata{
 		Keyspace:      "gocql_test",
 		Name:          "average",
-		ArgumentTypes: []TypeInfo{NativeType{typ: TypeInt}},
+		ArgumentTypes: []TypeInfo{NativeType{typ: TypeInt, proto: protoVer}},
 		InitCond:      "(0, 0)",
-		ReturnType:    NativeType{typ: TypeDouble},
+		ReturnType:    NativeType{typ: TypeDouble, proto: protoVer},
 		StateType: TupleTypeInfo{
-			NativeType: NativeType{typ: TypeTuple},
+			NativeType: NativeType{typ: TypeTuple, proto: protoVer},
 
 			Elems: []TypeInfo{
-				NativeType{typ: TypeInt},
-				NativeType{typ: TypeBigInt},
+				NativeType{typ: TypeInt, proto: protoVer},
+				NativeType{typ: TypeBigInt, proto: protoVer},
 			},
 		},
 		stateFunc: "avgstate",
@@ -2566,28 +2607,29 @@ func TestFunctionMetadata(t *testing.T) {
 	avgState := functions[1]
 	avgFinal := functions[0]
 
+	protoVer := byte(session.cfg.ProtoVersion)
 	avgStateBody := "if (val !=null) {state.setInt(0, state.getInt(0)+1); state.setLong(1, state.getLong(1)+val.intValue());}return state;"
 	expectedAvgState := FunctionMetadata{
 		Keyspace: "gocql_test",
 		Name:     "avgstate",
 		ArgumentTypes: []TypeInfo{
 			TupleTypeInfo{
-				NativeType: NativeType{typ: TypeTuple},
+				NativeType: NativeType{typ: TypeTuple, proto: protoVer},
 
 				Elems: []TypeInfo{
-					NativeType{typ: TypeInt},
-					NativeType{typ: TypeBigInt},
+					NativeType{typ: TypeInt, proto: protoVer},
+					NativeType{typ: TypeBigInt, proto: protoVer},
 				},
 			},
-			NativeType{typ: TypeInt},
+			NativeType{typ: TypeInt, proto: protoVer},
 		},
 		ArgumentNames: []string{"state", "val"},
 		ReturnType: TupleTypeInfo{
-			NativeType: NativeType{typ: TypeTuple},
+			NativeType: NativeType{typ: TypeTuple, proto: protoVer},
 
 			Elems: []TypeInfo{
-				NativeType{typ: TypeInt},
-				NativeType{typ: TypeBigInt},
+				NativeType{typ: TypeInt, proto: protoVer},
+				NativeType{typ: TypeBigInt, proto: protoVer},
 			},
 		},
 		CalledOnNullInput: true,
@@ -2604,16 +2646,16 @@ func TestFunctionMetadata(t *testing.T) {
 		Name:     "avgfinal",
 		ArgumentTypes: []TypeInfo{
 			TupleTypeInfo{
-				NativeType: NativeType{typ: TypeTuple},
+				NativeType: NativeType{typ: TypeTuple, proto: protoVer},
 
 				Elems: []TypeInfo{
-					NativeType{typ: TypeInt},
-					NativeType{typ: TypeBigInt},
+					NativeType{typ: TypeInt, proto: protoVer},
+					NativeType{typ: TypeBigInt, proto: protoVer},
 				},
 			},
 		},
 		ArgumentNames:     []string{"state"},
-		ReturnType:        NativeType{typ: TypeDouble},
+		ReturnType:        NativeType{typ: TypeDouble, proto: protoVer},
 		CalledOnNullInput: true,
 		Language:          "java",
 		Body:              finalStateBody,
@@ -2717,15 +2759,16 @@ func TestKeyspaceMetadata(t *testing.T) {
 	if flagCassVersion.Before(3, 0, 0) {
 		textType = TypeVarchar
 	}
+	protoVer := byte(session.cfg.ProtoVersion)
 	expectedType := UserTypeMetadata{
 		Keyspace:   "gocql_test",
 		Name:       "basicview",
 		FieldNames: []string{"birthday", "nationality", "weight", "height"},
 		FieldTypes: []TypeInfo{
-			NativeType{typ: TypeTimestamp},
-			NativeType{typ: textType},
-			NativeType{typ: textType},
-			NativeType{typ: textType},
+			NativeType{typ: TypeTimestamp, proto: protoVer},
+			NativeType{typ: textType, proto: protoVer},
+			NativeType{typ: textType, proto: protoVer},
+			NativeType{typ: textType, proto: protoVer},
 		},
 	}
 	if !reflect.DeepEqual(*keyspaceMetadata.UserTypes["basicview"], expectedType) {
