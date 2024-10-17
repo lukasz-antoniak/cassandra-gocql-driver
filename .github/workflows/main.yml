@@ -100,7 +100,7 @@ jobs:
           ccm create test -v $VERSION -n 3 -d --vnodes --jvm_arg="-Xmx256m -XX:NewSize=100m"
           ccm updateconf "${conf[@]}"
 
-          export JVM_EXTRA_OPTS=" -Dcassandra.test.fail_writes_ks=test -Dcassandra.custom_query_handler_class=org.apache.cassandra.cql3.CustomPayloadMirroringQueryHandler -Dcassandra.gossip_settle_min_wait_ms=1000 -Dcassandra.gossip_settle_interval_ms=500 -Dcassandra.gossip_settle_poll_success_required=2"
+          export JVM_EXTRA_OPTS=" -Dcassandra.test.fail_writes_ks=test -Dcassandra.custom_query_handler_class=org.apache.cassandra.cql3.CustomPayloadMirroringQueryHandler"
 
           ccm start --wait-for-binary-proto --verbose
           ccm status
@@ -171,8 +171,11 @@ jobs:
           python3 -m venv ~/venv
           ~/venv/bin/pip install setuptools
           ~/venv/bin/pip install "git+https://github.com/riptano/ccm.git@${CCM_VERSION}"
+<<<<<<< HEAD
           echo "PATH=~/venv/bin:$PATH" >> $GITHUB_ENV
 >>>>>>> 09a5688 (Install JDK 11 for C* 4.x)
+=======
+>>>>>>> 9205eff (Fix integration tests Github action)
       - name: Start cassandra nodes
         run: |
           source ~/venv/bin/activate
@@ -221,7 +224,7 @@ jobs:
 
           rm -rf $HOME/.ccm/test/node1/data/system_auth
 
-          export JVM_EXTRA_OPTS=" -Dcassandra.test.fail_writes_ks=test -Dcassandra.custom_query_handler_class=org.apache.cassandra.cql3.CustomPayloadMirroringQueryHandler -Dcassandra.gossip_settle_min_wait_ms=1000 -Dcassandra.gossip_settle_interval_ms=500 -Dcassandra.gossip_settle_poll_success_required=2"
+          export JVM_EXTRA_OPTS=" -Dcassandra.test.fail_writes_ks=test -Dcassandra.custom_query_handler_class=org.apache.cassandra.cql3.CustomPayloadMirroringQueryHandler"
 
           ccm start --wait-for-binary-proto --verbose
           ccm status
