@@ -1,4 +1,4 @@
-name: Setup environment
+name: Setup integration testing environment
 runs:
   using: "composite"
   steps:
