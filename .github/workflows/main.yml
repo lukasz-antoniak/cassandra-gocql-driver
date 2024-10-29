@@ -7,6 +7,9 @@ on:
   pull_request:
     types: [ opened, synchronize, reopened ]
 
+env:
+  CCM_VERSION: "6e71061146f7ae67b84ccd2b1d90d7319b640e4c"
+
 jobs:
   build:
     name: Unit tests
@@ -48,7 +51,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('go.mod') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - uses: ./.github/workflows/setup-environment
+      - name: Setup environment
+        uses: ./.github/actions/setup-environment
       - name: Start cassandra nodes
         run: |
           source ~/venv/bin/activate
@@ -133,7 +137,8 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version: ${{ matrix.go }}
-      - uses: ./.github/workflows/setup-environment
+      - name: Setup environment
+        uses: ./.github/actions/setup-environment
       - name: Start cassandra nodes
         run: |
           source ~/venv/bin/activate
