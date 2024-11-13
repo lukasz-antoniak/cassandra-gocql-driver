@@ -60,7 +60,7 @@ func Example_batch() {
 		Args:       []interface{}{1, 3, "1.3"},
 		Idempotent: true,
 	})
-	err = session.ExecuteBatch(b)
+	_, err = session.ExecuteBatch(b)
 	if err != nil {
 		log.Fatal(err)
 	}
