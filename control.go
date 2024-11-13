@@ -493,7 +493,7 @@ func (c *controlConn) withConnHost(fn func(*connHost) *Iter) *Iter {
 		return fn(ch)
 	}
 
-	return &Iter{err: errNoControl}
+	return NewIterErr(errNoControl)
 }
 
 func (c *controlConn) withConn(fn func(*Conn) *Iter) *Iter {
@@ -506,19 +506,23 @@ func (c *controlConn) withConn(fn func(*Conn) *Iter) *Iter {
 func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter) {
 	q := c.session.Query(statement, values...).Consistency(One).RoutingKey([]byte{}).Trace(nil)
 
+	qm := &queryMetrics{m: make(map[string]*hostMetrics)}
 	for {
 		iter = c.withConn(func(conn *Conn) *Iter {
 			// we want to keep the query on the control connection
 			q.conn = conn
-			return conn.executeQuery(context.TODO(), q)
+			return conn.executeQuery(context.TODO(), q, nil)
 		})
 
 		if gocqlDebug && iter.err != nil {
 			c.session.logger.Printf("control: error executing %q: %v\n", statement, iter.err)
 		}
 
-		q.AddAttempts(1, c.getConn().host)
-		if iter.err == nil || !c.retry.Attempt(q) {
+		iter.AddAttempts(1, c.getConn().host)
+		// merge query metrics across multiple iterators
+		qm.merge(iter.metrics)
+		iter.metrics = qm
+		if iter.err == nil || !c.retry.Attempt(q, *iter) {
 			break
 		}
 	}
@@ -528,7 +532,7 @@ func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter
 
 func (c *controlConn) awaitSchemaAgreement() error {
 	return c.withConn(func(conn *Conn) *Iter {
-		return &Iter{err: conn.awaitSchemaAgreement(context.TODO())}
+		return NewIterErr(conn.awaitSchemaAgreement(context.TODO()))
 	}).err
 }
 
