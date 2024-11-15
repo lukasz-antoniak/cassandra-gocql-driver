@@ -506,7 +506,7 @@ func (c *controlConn) withConn(fn func(*Conn) *Iter) *Iter {
 func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter) {
 	q := c.session.Query(statement, values...).Consistency(One).RoutingKey([]byte{}).Trace(nil)
 
-	qm := &queryMetrics{m: make(map[string]*hostMetrics)}
+	var prev *Iter
 	for {
 		iter = c.withConn(func(conn *Conn) *Iter {
 			// we want to keep the query on the control connection
@@ -519,9 +519,7 @@ func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter
 		}
 
 		iter.AddAttempts(1, c.getConn().host)
-		// merge query metrics across multiple iterators
-		qm.merge(iter.metrics)
-		iter.metrics = qm
+		iter.merge(prev)
 		if iter.err == nil {
 			break
 		}
@@ -531,6 +529,7 @@ func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter
 			break
 		}
 		q = iter.qry.(*Query)
+		prev = iter
 	}
 
 	return

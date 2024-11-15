@@ -1471,14 +1471,14 @@ type Iter struct {
 	closed int32
 }
 
-func NewIter(qry ExecutableQuery) *Iter {
+func newIter(qry ExecutableQuery) *Iter {
 	return &Iter{
 		qry:     qry,
 		metrics: &queryMetrics{m: make(map[string]*hostMetrics)},
 	}
 }
 
-func NewIterFramer(qry ExecutableQuery, f *framer) *Iter {
+func newIterFramer(qry ExecutableQuery, f *framer) *Iter {
 	return &Iter{
 		qry:     qry,
 		framer:  f,
@@ -1487,23 +1487,30 @@ func NewIterFramer(qry ExecutableQuery, f *framer) *Iter {
 }
 
 func NewIterErr(qry ExecutableQuery, e error) *Iter {
-	return NewIterErrFramer(qry, e, nil)
+	return newIterErrFramer(qry, e, nil)
 }
 
 func NewIterErrFromIter(qry ExecutableQuery, e error, iter *Iter) *Iter {
-	i := NewIterErrFramer(qry, e, nil)
+	i := newIterErrFramer(qry, e, nil)
 	if iter != nil {
 		i.metrics = iter.metrics
 	}
 	return i
 }
 
-func NewIterErrFramer(qry ExecutableQuery, e error, f *framer) *Iter {
+func newIterErrFramer(qry ExecutableQuery, e error, f *framer) *Iter {
 	return &Iter{
 		qry:     qry,
 		err:     e,
 		framer:  f,
 		metrics: &queryMetrics{m: make(map[string]*hostMetrics)},
+	}
+}
+
+// merge state of two iterators
+func (iter *Iter) merge(other *Iter) {
+	if other != nil {
+		iter.metrics.merge(other.metrics)
 	}
 }
 

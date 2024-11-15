@@ -1430,7 +1430,7 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 
 	switch x := resp.(type) {
 	case *resultVoidFrame:
-		return NewIterFramer(qry, framer)
+		return newIterFramer(qry, framer)
 	case *resultRowsFrame:
 		iter := &Iter{
 			qry:     qry,
@@ -1445,7 +1445,7 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 				iter.meta = info.response
 				iter.meta.pagingState = copyBytes(x.meta.pagingState)
 			} else {
-				return NewIterErrFramer(qry, errors.New("gocql: did not receive metadata but prepared info is nil"), framer)
+				return newIterErrFramer(qry, errors.New("gocql: did not receive metadata but prepared info is nil"), framer)
 			}
 		} else {
 			iter.meta = x.meta
@@ -1465,9 +1465,9 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 
 		return iter
 	case *resultKeyspaceFrame:
-		return NewIterFramer(qry, framer)
+		return newIterFramer(qry, framer)
 	case *schemaChangeKeyspace, *schemaChangeTable, *schemaChangeFunction, *schemaChangeAggregate, *schemaChangeType:
-		iter := NewIterFramer(qry, framer)
+		iter := newIterFramer(qry, framer)
 		if err := c.awaitSchemaAgreement(ctx); err != nil {
 			// TODO: should have this behind a flag
 			c.logger.Println(err)
@@ -1481,9 +1481,9 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 		c.session.stmtsLRU.evictPreparedID(stmtCacheKey, x.StatementId)
 		return c.executeQuery(ctx, qry, nil)
 	case error:
-		return NewIterErrFramer(qry, x, framer)
+		return newIterErrFramer(qry, x, framer)
 	default:
-		return NewIterErrFramer(
+		return newIterErrFramer(
 			qry,
 			NewErrProtocol("Unknown type in response to execute query (%T): %s", x, x),
 			framer,
@@ -1611,7 +1611,7 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 
 	resp, err := framer.parseFrame()
 	if err != nil {
-		return NewIterErrFramer(batch, err, framer)
+		return newIterErrFramer(batch, err, framer)
 	}
 
 	if len(framer.traceID) > 0 && batch.trace != nil {
@@ -1620,7 +1620,7 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 
 	switch x := resp.(type) {
 	case *resultVoidFrame:
-		return NewIter(batch)
+		return newIter(batch)
 	case *RequestErrUnprepared:
 		stmt, found := stmts[string(x.StatementId)]
 		if found {
@@ -1639,9 +1639,9 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 
 		return iter
 	case error:
-		return NewIterErrFramer(batch, x, framer)
+		return newIterErrFramer(batch, x, framer)
 	default:
-		return NewIterErrFramer(batch, NewErrProtocol("Unknown type in response to batch statement: %s", x), framer)
+		return newIterErrFramer(batch, NewErrProtocol("Unknown type in response to batch statement: %s", x), framer)
 	}
 }
 

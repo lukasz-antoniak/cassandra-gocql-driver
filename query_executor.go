@@ -136,7 +136,6 @@ func (q *queryExecutor) do(ctx context.Context, qry ExecutableQuery, it *Iter, h
 
 	var lastErr error
 	var iter *Iter
-	qm := &queryMetrics{m: make(map[string]*hostMetrics)}
 	for selectedHost != nil {
 		host := selectedHost.Info()
 		if host == nil || !host.IsUp() {
@@ -156,10 +155,9 @@ func (q *queryExecutor) do(ctx context.Context, qry ExecutableQuery, it *Iter, h
 			continue
 		}
 
-		iter = q.attemptQuery(ctx, qry, it, conn)
-		// merge query metrics across multiple iterators
-		qm.merge(iter.metrics)
-		iter.metrics = qm
+		ni := q.attemptQuery(ctx, qry, it, conn)
+		ni.merge(iter)
+		iter = ni
 		iter.host = selectedHost.Info()
 		// Update host
 		switch iter.err {
