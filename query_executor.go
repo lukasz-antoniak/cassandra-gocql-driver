@@ -45,7 +45,9 @@ type ExecutableQuery interface {
 	withContext(context.Context) ExecutableQuery
 	Clone() ExecutableQuery
 
-	RetryableQuery
+	SetConsistency(c Consistency)
+	GetConsistency() Consistency
+	Context() context.Context
 }
 
 type queryExecutor struct {
@@ -68,13 +70,14 @@ func (q *queryExecutor) speculate(ctx context.Context, qry ExecutableQuery, sp S
 	ticker := time.NewTicker(sp.Delay())
 	defer ticker.Stop()
 
+	qry = qry.Clone()
 	for i := 0; i < sp.Attempts(); i++ {
 		select {
 		case <-ticker.C:
 			qry.borrowForExecution() // ensure liveness in case of executing Query to prevent races with Query.Release().
 			go q.run(ctx, qry, nil, hostIter, results)
 		case <-ctx.Done():
-			return NewIterErr(ctx.Err())
+			return NewIterErr(qry, ctx.Err())
 		case iter := <-results:
 			return iter
 		}
@@ -123,7 +126,7 @@ func (q *queryExecutor) executeQuery(qry ExecutableQuery, it *Iter) (*Iter, erro
 	case iter := <-results:
 		return iter, nil
 	case <-ctx.Done():
-		return NewIterErr(ctx.Err()), nil
+		return NewIterErr(qry, ctx.Err()), nil
 	}
 }
 
@@ -171,10 +174,15 @@ func (q *queryExecutor) do(ctx context.Context, qry ExecutableQuery, it *Iter, h
 
 		// Exit if the query was successful
 		// or no retry policy defined or retry attempts were reached
-		if iter.err == nil || rt == nil || !rt.Attempt(qry, *iter) {
+		if iter.err == nil || rt == nil {
 			return iter
 		}
-		qry = rt.GetRetryRequest(qry, *iter, iter.err)
+		// clone to make the query attributes updatable by retry policy
+		iter.qry = qry.Clone()
+		if !rt.Attempt(iter) {
+			return iter
+		}
+		qry = iter.qry
 		lastErr = iter.err
 
 		// If query is unsuccessful, check the error with RetryPolicy to retry
@@ -190,15 +198,15 @@ func (q *queryExecutor) do(ctx context.Context, qry ExecutableQuery, it *Iter, h
 			continue
 		default:
 			// Undefined? Return nil and error, this will panic in the requester
-			return NewIterErrFromIter(ErrUnknownRetryType, iter)
+			return NewIterErrFromIter(qry, ErrUnknownRetryType, iter)
 		}
 	}
 
 	if lastErr != nil {
-		return NewIterErrFromIter(lastErr, iter)
+		return NewIterErrFromIter(qry, lastErr, iter)
 	}
 
-	return NewIterErrFromIter(ErrNoConnections, iter)
+	return NewIterErrFromIter(qry, ErrNoConnections, iter)
 }
 
 func (q *queryExecutor) run(ctx context.Context, qry ExecutableQuery, it *Iter, hostIter NextHost, results chan<- *Iter) {

@@ -472,14 +472,11 @@ type testRetryPolicy struct {
 	NumRetries int
 }
 
-func (t *testRetryPolicy) Attempt(q ExecutableQuery, i Iter) bool {
-	return i.Attempts() <= t.NumRetries
+func (t *testRetryPolicy) Attempt(q RetryableQuery) bool {
+	return q.Attempts() <= t.NumRetries
 }
 func (t *testRetryPolicy) GetRetryType(err error) RetryType {
 	return Retry
-}
-func (t *testRetryPolicy) GetRetryRequest(q ExecutableQuery, i Iter, err error) ExecutableQuery {
-	return q
 }
 
 func TestSpeculativeExecution(t *testing.T) {

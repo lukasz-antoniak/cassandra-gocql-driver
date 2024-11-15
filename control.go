@@ -493,7 +493,7 @@ func (c *controlConn) withConnHost(fn func(*connHost) *Iter) *Iter {
 		return fn(ch)
 	}
 
-	return NewIterErr(errNoControl)
+	return NewIterErr(nil, errNoControl)
 }
 
 func (c *controlConn) withConn(fn func(*Conn) *Iter) *Iter {
@@ -522,9 +522,15 @@ func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter
 		// merge query metrics across multiple iterators
 		qm.merge(iter.metrics)
 		iter.metrics = qm
-		if iter.err == nil || !c.retry.Attempt(q, *iter) {
+		if iter.err == nil {
 			break
 		}
+		// clone to make the query attributes updatable by retry policy
+		iter.qry = q.Clone()
+		if !c.retry.Attempt(iter) {
+			break
+		}
+		q = iter.qry.(*Query)
 	}
 
 	return
@@ -532,7 +538,7 @@ func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter
 
 func (c *controlConn) awaitSchemaAgreement() error {
 	return c.withConn(func(conn *Conn) *Iter {
-		return NewIterErr(conn.awaitSchemaAgreement(context.TODO()))
+		return NewIterErr(nil, conn.awaitSchemaAgreement(context.TODO()))
 	}).err
 }
 

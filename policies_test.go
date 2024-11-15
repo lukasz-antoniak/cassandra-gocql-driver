@@ -283,7 +283,6 @@ func TestCOWList_Add(t *testing.T) {
 
 // TestSimpleRetryPolicy makes sure that we only allow 1 + numRetries attempts
 func TestSimpleRetryPolicy(t *testing.T) {
-	q := &Query{routingInfo: &queryRoutingInfo{}}
 	i := &Iter{}
 
 	// this should allow a total of 3 tries.
@@ -303,10 +302,10 @@ func TestSimpleRetryPolicy(t *testing.T) {
 
 	for _, c := range cases {
 		i.metrics = preFilledQueryMetrics(map[string]*hostMetrics{"127.0.0.1": {Attempts: c.attempts}})
-		if c.allow && !rt.Attempt(q, *i) {
+		if c.allow && !rt.Attempt(i) {
 			t.Fatalf("should allow retry after %d attempts", c.attempts)
 		}
-		if !c.allow && rt.Attempt(q, *i) {
+		if !c.allow && rt.Attempt(i) {
 			t.Fatalf("should not allow retry after %d attempts", c.attempts)
 		}
 	}
@@ -343,7 +342,7 @@ func TestExponentialBackoffPolicy(t *testing.T) {
 func TestDowngradingConsistencyRetryPolicy(t *testing.T) {
 
 	q := &Query{cons: LocalQuorum, routingInfo: &queryRoutingInfo{}}
-	i := &Iter{}
+	i := &Iter{qry: q}
 
 	rewt0 := &RequestErrWriteTimeout{
 		Received:  0,
@@ -391,10 +390,10 @@ func TestDowngradingConsistencyRetryPolicy(t *testing.T) {
 		if c.retryType != rt.GetRetryType(c.err) {
 			t.Fatalf("retry type should be %v", c.retryType)
 		}
-		if c.allow && !rt.Attempt(q, *i) {
+		if c.allow && !rt.Attempt(i) {
 			t.Fatalf("should allow retry after %d attempts", c.attempts)
 		}
-		if !c.allow && rt.Attempt(q, *i) {
+		if !c.allow && rt.Attempt(i) {
 			t.Fatalf("should not allow retry after %d attempts", c.attempts)
 		}
 	}

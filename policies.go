@@ -118,6 +118,7 @@ func (c *cowHostList) remove(ip net.IP) bool {
 // RetryableQuery is an interface that represents a query or batch statement that
 // exposes the correct functions for the retry policy logic to evaluate correctly.
 type RetryableQuery interface {
+	Attempts() int
 	SetConsistency(c Consistency)
 	GetConsistency() Consistency
 	Context() context.Context
@@ -144,9 +145,8 @@ var ErrUnknownRetryType = errors.New("unknown retry type returned by retry polic
 // See SimpleRetryPolicy as an example of implementing and using a RetryPolicy
 // interface.
 type RetryPolicy interface {
-	Attempt(ExecutableQuery, Iter) bool
+	Attempt(RetryableQuery) bool
 	GetRetryType(error) RetryType
-	GetRetryRequest(ExecutableQuery, Iter, error) ExecutableQuery
 }
 
 // SimpleRetryPolicy has simple logic for attempting a query a fixed number of times.
@@ -164,16 +164,12 @@ type SimpleRetryPolicy struct {
 
 // Attempt tells gocql to attempt the query again based on query.Attempts being less
 // than the NumRetries defined in the policy.
-func (s *SimpleRetryPolicy) Attempt(q ExecutableQuery, i Iter) bool {
-	return i.Attempts() <= s.NumRetries
+func (s *SimpleRetryPolicy) Attempt(q RetryableQuery) bool {
+	return q.Attempts() <= s.NumRetries
 }
 
 func (s *SimpleRetryPolicy) GetRetryType(err error) RetryType {
 	return RetryNextHost
-}
-
-func (s *SimpleRetryPolicy) GetRetryRequest(q ExecutableQuery, i Iter, err error) ExecutableQuery {
-	return q
 }
 
 // ExponentialBackoffRetryPolicy sleeps between attempts
@@ -182,11 +178,11 @@ type ExponentialBackoffRetryPolicy struct {
 	Min, Max   time.Duration
 }
 
-func (e *ExponentialBackoffRetryPolicy) Attempt(q ExecutableQuery, i Iter) bool {
-	if i.Attempts() > e.NumRetries {
+func (e *ExponentialBackoffRetryPolicy) Attempt(q RetryableQuery) bool {
+	if q.Attempts() > e.NumRetries {
 		return false
 	}
-	time.Sleep(e.napTime(i.Attempts()))
+	time.Sleep(e.napTime(q.Attempts()))
 	return true
 }
 
@@ -212,10 +208,6 @@ func (e *ExponentialBackoffRetryPolicy) GetRetryType(err error) RetryType {
 	return RetryNextHost
 }
 
-func (e *ExponentialBackoffRetryPolicy) GetRetryRequest(q ExecutableQuery, i Iter, err error) ExecutableQuery {
-	return q
-}
-
 func (e *ExponentialBackoffRetryPolicy) napTime(attempts int) time.Duration {
 	return getExponentialTime(e.Min, e.Max, attempts)
 }
@@ -239,9 +231,17 @@ type DowngradingConsistencyRetryPolicy struct {
 	ConsistencyLevelsToTry []Consistency
 }
 
-func (d *DowngradingConsistencyRetryPolicy) Attempt(q ExecutableQuery, i Iter) bool {
-	currentAttempt := i.Attempts()
-	return currentAttempt <= len(d.ConsistencyLevelsToTry)
+func (d *DowngradingConsistencyRetryPolicy) Attempt(q RetryableQuery) bool {
+	currentAttempt := q.Attempts()
+
+	if currentAttempt > len(d.ConsistencyLevelsToTry) {
+		return false
+	} else if currentAttempt > 0 {
+		q.SetConsistency(d.ConsistencyLevelsToTry[currentAttempt-1])
+		return true
+	}
+
+	return true
 }
 
 func (d *DowngradingConsistencyRetryPolicy) GetRetryType(err error) RetryType {
@@ -267,20 +267,6 @@ func (d *DowngradingConsistencyRetryPolicy) GetRetryType(err error) RetryType {
 	default:
 		return RetryNextHost
 	}
-}
-
-func (d *DowngradingConsistencyRetryPolicy) GetRetryRequest(q ExecutableQuery, i Iter, err error) ExecutableQuery {
-	currentAttempt := i.Attempts()
-
-	if currentAttempt > len(d.ConsistencyLevelsToTry) {
-		return q
-	} else if currentAttempt > 0 {
-		rq := q.Clone()
-		rq.SetConsistency(d.ConsistencyLevelsToTry[currentAttempt-1])
-		return rq
-	}
-
-	return q
 }
 
 type HostStateNotifier interface {

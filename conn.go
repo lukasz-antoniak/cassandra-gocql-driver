@@ -1362,7 +1362,7 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 		var err error
 		info, err = c.prepareStatement(ctx, qry.stmt, qry.trace)
 		if err != nil {
-			return NewIterErr(err)
+			return NewIterErr(qry, err)
 		}
 
 		values := qry.values
@@ -1375,12 +1375,12 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 			})
 
 			if err != nil {
-				return NewIterErr(err)
+				return NewIterErr(qry, err)
 			}
 		}
 
 		if len(values) != info.request.actualColCount {
-			return NewIterErr(fmt.Errorf("gocql: expected %d values send got %d", info.request.actualColCount, len(values)))
+			return NewIterErr(qry, fmt.Errorf("gocql: expected %d values send got %d", info.request.actualColCount, len(values)))
 		}
 
 		params.values = make([]queryValues, len(values))
@@ -1389,7 +1389,7 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 			value := values[i]
 			typ := info.request.columns[i].TypeInfo
 			if err := marshalQueryValue(typ, value, v); err != nil {
-				return NewIterErr(err)
+				return NewIterErr(qry, err)
 			}
 		}
 
@@ -1416,12 +1416,12 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 
 	framer, err := c.exec(ctx, frame, qry.trace)
 	if err != nil {
-		return NewIterErr(err)
+		return NewIterErr(qry, err)
 	}
 
 	resp, err := framer.parseFrame()
 	if err != nil {
-		return NewIterErr(err)
+		return NewIterErr(qry, err)
 	}
 
 	if len(framer.traceID) > 0 && qry.trace != nil {
@@ -1430,9 +1430,10 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 
 	switch x := resp.(type) {
 	case *resultVoidFrame:
-		return NewIterFramer(framer)
+		return NewIterFramer(qry, framer)
 	case *resultRowsFrame:
 		iter := &Iter{
+			qry:     qry,
 			meta:    x.meta,
 			framer:  framer,
 			numRows: x.numRows,
@@ -1444,7 +1445,7 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 				iter.meta = info.response
 				iter.meta.pagingState = copyBytes(x.meta.pagingState)
 			} else {
-				return NewIterErrFramer(errors.New("gocql: did not receive metadata but prepared info is nil"), framer)
+				return NewIterErrFramer(qry, errors.New("gocql: did not receive metadata but prepared info is nil"), framer)
 			}
 		} else {
 			iter.meta = x.meta
@@ -1456,7 +1457,6 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 
 			iter.next = &nextIter{
 				iter:      iter,
-				qry:       newQry,
 				pageState: copyBytes(x.meta.pagingState),
 				pos:       int((1 - qry.prefetch) * float64(x.numRows)),
 			}
@@ -1468,9 +1468,9 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 
 		return iter
 	case *resultKeyspaceFrame:
-		return NewIterFramer(framer)
+		return NewIterFramer(qry, framer)
 	case *schemaChangeKeyspace, *schemaChangeTable, *schemaChangeFunction, *schemaChangeAggregate, *schemaChangeType:
-		iter := NewIterFramer(framer)
+		iter := NewIterFramer(qry, framer)
 		if err := c.awaitSchemaAgreement(ctx); err != nil {
 			// TODO: should have this behind a flag
 			c.logger.Println(err)
@@ -1484,9 +1484,10 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 		c.session.stmtsLRU.evictPreparedID(stmtCacheKey, x.StatementId)
 		return c.executeQuery(ctx, qry, nil)
 	case error:
-		return NewIterErrFramer(x, framer)
+		return NewIterErrFramer(qry, x, framer)
 	default:
 		return NewIterErrFramer(
+			qry,
 			NewErrProtocol("Unknown type in response to execute query (%T): %s", x, x),
 			framer,
 		)
@@ -1543,7 +1544,7 @@ func (c *Conn) UseKeyspace(keyspace string) error {
 
 func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 	if c.version == protoVersion1 {
-		return NewIterErr(ErrUnsupported)
+		return NewIterErr(batch, ErrUnsupported)
 	}
 
 	n := len(batch.Entries)
@@ -1566,7 +1567,7 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 		if len(entry.Args) > 0 || entry.binding != nil {
 			info, err := c.prepareStatement(batch.Context(), entry.Stmt, batch.trace)
 			if err != nil {
-				return NewIterErr(err)
+				return NewIterErr(batch, err)
 			}
 
 			var values []interface{}
@@ -1580,12 +1581,12 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 					PKeyColumns: info.request.pkeyColumns,
 				})
 				if err != nil {
-					return NewIterErr(err)
+					return NewIterErr(batch, err)
 				}
 			}
 
 			if len(values) != info.request.actualColCount {
-				return NewIterErr(fmt.Errorf("gocql: batch statement %d expected %d values send got %d", i, info.request.actualColCount, len(values)))
+				return NewIterErr(batch, fmt.Errorf("gocql: batch statement %d expected %d values send got %d", i, info.request.actualColCount, len(values)))
 			}
 
 			b.preparedID = info.id
@@ -1598,7 +1599,7 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 				value := values[j]
 				typ := info.request.columns[j].TypeInfo
 				if err := marshalQueryValue(typ, value, v); err != nil {
-					return NewIterErr(err)
+					return NewIterErr(batch, err)
 				}
 			}
 		} else {
@@ -1608,12 +1609,12 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 
 	framer, err := c.exec(batch.Context(), req, batch.trace)
 	if err != nil {
-		return NewIterErr(err)
+		return NewIterErr(batch, err)
 	}
 
 	resp, err := framer.parseFrame()
 	if err != nil {
-		return NewIterErrFramer(err, framer)
+		return NewIterErrFramer(batch, err, framer)
 	}
 
 	if len(framer.traceID) > 0 && batch.trace != nil {
@@ -1622,7 +1623,7 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 
 	switch x := resp.(type) {
 	case *resultVoidFrame:
-		return NewIter()
+		return NewIter(batch)
 	case *RequestErrUnprepared:
 		stmt, found := stmts[string(x.StatementId)]
 		if found {
@@ -1632,6 +1633,7 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 		return c.executeBatch(ctx, batch)
 	case *resultRowsFrame:
 		iter := &Iter{
+			qry:     batch,
 			meta:    x.meta,
 			framer:  framer,
 			numRows: x.numRows,
@@ -1640,9 +1642,9 @@ func (c *Conn) executeBatch(ctx context.Context, batch *Batch) *Iter {
 
 		return iter
 	case error:
-		return NewIterErrFramer(x, framer)
+		return NewIterErrFramer(batch, x, framer)
 	default:
-		return NewIterErrFramer(NewErrProtocol("Unknown type in response to batch statement: %s", x), framer)
+		return NewIterErrFramer(batch, NewErrProtocol("Unknown type in response to batch statement: %s", x), framer)
 	}
 }
 

@@ -377,7 +377,7 @@ func (s *Session) AwaitSchemaAgreement(ctx context.Context) error {
 		return errNoControl
 	}
 	return s.control.withConn(func(conn *Conn) *Iter {
-		return NewIterErr(conn.awaitSchemaAgreement(ctx))
+		return NewIterErr(nil, conn.awaitSchemaAgreement(ctx))
 	}).err
 }
 
@@ -540,12 +540,12 @@ func (s *Session) initialized() bool {
 func (s *Session) executeQuery(qry ExecutableQuery, it *Iter) *Iter {
 	// fail fast
 	if s.Closed() {
-		return NewIterErr(ErrSessionClosed)
+		return NewIterErr(qry, ErrSessionClosed)
 	}
 
 	iter, err := s.executor.executeQuery(qry, it)
 	if err != nil {
-		return NewIterErr(err)
+		return NewIterErr(qry, err)
 	}
 	if iter == nil {
 		panic("nil iter")
@@ -734,19 +734,19 @@ func (b *Batch) execute(ctx context.Context, conn *Conn, it *Iter) *Iter {
 func (s *Session) executeBatch(batch *Batch) *Iter {
 	// fail fast
 	if s.Closed() {
-		return NewIterErr(ErrSessionClosed)
+		return NewIterErr(batch, ErrSessionClosed)
 	}
 
 	// Prevent the execution of the batch if greater than the limit
 	// Currently batches have a limit of 65536 queries.
 	// https://datastax-oss.atlassian.net/browse/JAVA-229
 	if batch.Size() > BatchSizeMaximum {
-		return NewIterErr(ErrTooManyStmts)
+		return NewIterErr(batch, ErrTooManyStmts)
 	}
 
 	iter, err := s.executor.executeQuery(batch, nil)
 	if err != nil {
-		return NewIterErr(err)
+		return NewIterErr(batch, err)
 	}
 
 	return iter
@@ -941,7 +941,6 @@ type Query struct {
 	context               context.Context
 	idempotent            bool
 	customPayload         map[string][]byte
-	metrics               *queryMetrics
 	refCount              uint32
 
 	disableAutoPage bool
@@ -1339,7 +1338,7 @@ func isUseStatement(stmt string) bool {
 // over all results.
 func (q *Query) Iter() *Iter {
 	if isUseStatement(q.stmt) {
-		return NewIterErr(ErrUseStmt)
+		return NewIterErr(q, ErrUseStmt)
 	}
 	// if the query was specifically run on a connection then re-use that
 	// connection when fetching the next results
@@ -1458,6 +1457,7 @@ func (q *Query) releaseAfterExecution() {
 // were returned by a query. The iterator might send additional queries to the
 // database during the iteration if paging was enabled.
 type Iter struct {
+	qry     ExecutableQuery
 	err     error
 	pos     int
 	meta    resultMetadata
@@ -1471,37 +1471,52 @@ type Iter struct {
 	closed int32
 }
 
-func NewIter() *Iter {
+func NewIter(qry ExecutableQuery) *Iter {
 	return &Iter{
+		qry:     qry,
 		metrics: &queryMetrics{m: make(map[string]*hostMetrics)},
 	}
 }
 
-func NewIterFramer(f *framer) *Iter {
+func NewIterFramer(qry ExecutableQuery, f *framer) *Iter {
 	return &Iter{
+		qry:     qry,
 		framer:  f,
 		metrics: &queryMetrics{m: make(map[string]*hostMetrics)},
 	}
 }
 
-func NewIterErr(e error) *Iter {
-	return NewIterErrFramer(e, nil)
+func NewIterErr(qry ExecutableQuery, e error) *Iter {
+	return NewIterErrFramer(qry, e, nil)
 }
 
-func NewIterErrFromIter(e error, iter *Iter) *Iter {
-	i := NewIterErrFramer(e, nil)
+func NewIterErrFromIter(qry ExecutableQuery, e error, iter *Iter) *Iter {
+	i := NewIterErrFramer(qry, e, nil)
 	if iter != nil {
 		i.metrics = iter.metrics
 	}
 	return i
 }
 
-func NewIterErrFramer(e error, f *framer) *Iter {
+func NewIterErrFramer(qry ExecutableQuery, e error, f *framer) *Iter {
 	return &Iter{
+		qry:     qry,
 		err:     e,
 		framer:  f,
 		metrics: &queryMetrics{m: make(map[string]*hostMetrics)},
 	}
+}
+
+func (iter *Iter) GetConsistency() Consistency {
+	return iter.qry.GetConsistency()
+}
+
+func (iter *Iter) SetConsistency(c Consistency) {
+	iter.qry.SetConsistency(c)
+}
+
+func (iter *Iter) Context() context.Context {
+	return iter.qry.Context()
 }
 
 // Host returns the host which the query was sent to.
@@ -1783,7 +1798,6 @@ func (iter *Iter) NumRows() int {
 // single page might be attempted multiple times due to retries.
 type nextIter struct {
 	iter      *Iter
-	qry       *Query
 	pageState []byte
 	pos       int
 	oncea     sync.Once
@@ -1801,10 +1815,11 @@ func (n *nextIter) fetch() *Iter {
 	n.once.Do(func() {
 		// if the query was specifically run on a connection then re-use that
 		// connection when fetching the next results
-		if n.qry.conn != nil {
-			n.next = n.qry.conn.executeQuery(n.qry.Context(), n.qry, n.iter)
+		qry := n.iter.qry.(*Query)
+		if qry.conn != nil {
+			n.next = qry.conn.executeQuery(qry.Context(), qry, n.iter)
 		} else {
-			n.next = n.qry.session.executeQuery(n.qry, n.iter)
+			n.next = qry.session.executeQuery(qry, n.iter)
 		}
 	})
 	return n.next
