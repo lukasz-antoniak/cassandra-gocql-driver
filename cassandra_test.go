@@ -2832,7 +2832,7 @@ func TestManualQueryPaging(t *testing.T) {
 	}
 }
 
-func TestAutomaticQueryPaging(t *testing.T) {
+func TestQueryImmutability(t *testing.T) {
 	const rowsToInsert = 5
 
 	session := createSession(t)
@@ -2850,31 +2850,45 @@ func TestAutomaticQueryPaging(t *testing.T) {
 	}
 
 	query := session.Query("SELECT id, count FROM testAutomaticPaging").PageSize(2)
-	var id, count, fetched int
+	var id, count, fetched1, fetched2 int
 
-	iter := query.Iter()
-	scanner := iter.Scanner()
-	for scanner.Next() {
-		err := scanner.Scan(&id, &count)
+	iter1 := query.Iter()
+	iter2 := query.Iter()
+	scanner1 := iter1.Scanner()
+	scanner2 := iter2.Scanner()
+	for scanner1.Next() {
+		err := scanner1.Scan(&id, &count)
 		if err != nil {
 			t.Fatalf(err.Error())
+		}
+		if fetched1%2 == 0 {
+			// move two iterators at different pace, to verify that one does not impact the other
+			if !scanner2.Next() {
+				t.Fatalf("unexpected end of pagination after %d entries", fetched2)
+			} else {
+				fetched2++
+			}
 		}
 		if count != (id * id) {
 			t.Fatalf("got wrong value from iteration: got %d expected %d", count, id*id)
 		}
 		require.True(t, query.pageState == nil, "initial page state was not set")
-		require.True(t, iter.PageState() != nil, "page state is handled by the iterator")
+		require.True(t, iter1.PageState() != nil, "page state is handled by the iterator")
 
-		fetched++
+		fetched1++
 	}
 
-	if err := iter.Close(); err != nil {
+	if err := iter1.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := iter2.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	if fetched != rowsToInsert {
-		t.Fatalf("expected to fetch %d rows got %d", rowsToInsert, fetched)
+	if fetched1 != rowsToInsert {
+		t.Fatalf("expected to fetch %d rows got %d", rowsToInsert, fetched1)
 	}
+	require.Equal(t, math.Ceil(rowsToInsert/2.0), float64(fetched2))
 }
 
 func TestLexicalUUIDType(t *testing.T) {

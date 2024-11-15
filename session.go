@@ -980,7 +980,6 @@ func (q *Query) Clone() ExecutableQuery {
 		context:               q.context,
 		idempotent:            q.idempotent,
 		customPayload:         q.customPayload,
-		metrics:               q.metrics,
 		refCount:              q.refCount,
 		disableAutoPage:       q.disableAutoPage,
 		getKeyspace:           q.getKeyspace,
@@ -1011,7 +1010,6 @@ func (q *Query) defaultsFromSession() {
 	q.serialCons = s.cfg.SerialConsistency
 	q.defaultTimestamp = s.cfg.DefaultTimestamp
 	q.idempotent = s.cfg.DefaultIdempotence
-	q.metrics = &queryMetrics{m: make(map[string]*hostMetrics)}
 
 	q.spec = &NonSpeculativeExecution{}
 	s.mu.RUnlock()
