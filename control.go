@@ -525,7 +525,7 @@ func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter
 		if iter.err == nil {
 			break
 		}
-		// clone to make the query attributes updatable by retry policy
+		// clone to make the query attributes updatable by retry policy and original immutable
 		iter.qry = q.Clone()
 		if !c.retry.Attempt(iter) {
 			break

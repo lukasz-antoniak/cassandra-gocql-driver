@@ -472,8 +472,8 @@ type testRetryPolicy struct {
 	NumRetries int
 }
 
-func (t *testRetryPolicy) Attempt(q RetryableQuery) bool {
-	return q.Attempts() <= t.NumRetries
+func (t *testRetryPolicy) Attempt(qry RetryableQuery) bool {
+	return qry.Attempts() <= t.NumRetries
 }
 func (t *testRetryPolicy) GetRetryType(err error) RetryType {
 	return Retry

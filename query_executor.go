@@ -177,7 +177,7 @@ func (q *queryExecutor) do(ctx context.Context, qry ExecutableQuery, it *Iter, h
 		if iter.err == nil || rt == nil {
 			return iter
 		}
-		// clone to make the query attributes updatable by retry policy
+		// clone to make the query attributes updatable by retry policy and original immutable
 		iter.qry = qry.Clone()
 		if !rt.Attempt(iter) {
 			return iter

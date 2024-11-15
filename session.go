@@ -537,7 +537,7 @@ func (s *Session) initialized() bool {
 	return initialized
 }
 
-func (s *Session) executeQuery(qry ExecutableQuery, it *Iter) *Iter {
+func (s *Session) executeQuery(qry *Query, it *Iter) *Iter {
 	// fail fast
 	if s.Closed() {
 		return NewIterErr(qry, ErrSessionClosed)

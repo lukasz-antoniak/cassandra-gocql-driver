@@ -1452,9 +1452,6 @@ func (c *Conn) executeQuery(ctx context.Context, qry *Query, it *Iter) *Iter {
 		}
 
 		if x.meta.morePages() && !qry.disableAutoPage {
-			newQry := new(Query)
-			*newQry = *qry
-
 			iter.next = &nextIter{
 				iter:      iter,
 				pageState: copyBytes(x.meta.pagingState),
