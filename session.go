@@ -1514,6 +1514,11 @@ func (iter *Iter) merge(other *Iter) {
 	}
 }
 
+// GetQuery returns single CQL query or batch associated with this iterator
+func (iter *Iter) GetQuery() ExecutableQuery {
+	return iter.qry
+}
+
 func (iter *Iter) GetConsistency() Consistency {
 	return iter.qry.GetConsistency()
 }

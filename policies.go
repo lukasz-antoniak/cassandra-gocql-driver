@@ -118,6 +118,7 @@ func (c *cowHostList) remove(ip net.IP) bool {
 // RetryableQuery is an interface that represents a query or batch statement that
 // exposes the correct functions for the retry policy logic to evaluate correctly.
 type RetryableQuery interface {
+	GetQuery() ExecutableQuery
 	Attempts() int
 	SetConsistency(c Consistency)
 	GetConsistency() Consistency
