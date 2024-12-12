@@ -519,6 +519,7 @@ func (c *controlConn) query(statement string, values ...interface{}) (iter *Iter
 		}
 
 		iter.AddAttempts(1, c.getConn().host)
+		// merge state of the previous iterator, so that mutable state (e.g. metrics) is carried over
 		iter.merge(prev)
 		if iter.err == nil {
 			break
