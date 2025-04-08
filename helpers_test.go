@@ -250,6 +250,36 @@ func TestGetCassandraType(t *testing.T) {
 				Dimensions: 5,
 			},
 		},
+		{
+			"vector<map<uuid,timestamp>, 5>", VectorType{
+				NativeType: NativeType{
+					typ:    TypeCustom,
+					custom: VECTOR_TYPE,
+				},
+				SubType: CollectionType{
+					NativeType: NativeType{typ: TypeMap},
+					Key:        NativeType{typ: TypeUUID},
+					Elem:       NativeType{typ: TypeTimestamp},
+				},
+				Dimensions: 5,
+			},
+		},
+		{
+			"vector<frozen<tuple<int, float>>, 100>", VectorType{
+				NativeType: NativeType{
+					typ:    TypeCustom,
+					custom: VECTOR_TYPE,
+				},
+				SubType: TupleTypeInfo{
+					NativeType: NativeType{typ: TypeTuple},
+					Elems: []TypeInfo{
+						NativeType{typ: TypeInt},
+						NativeType{typ: TypeFloat},
+					},
+				},
+				Dimensions: 100,
+			},
+		},
 	}
 
 	for _, test := range tests {
