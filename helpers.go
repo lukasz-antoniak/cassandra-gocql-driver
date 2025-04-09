@@ -164,20 +164,21 @@ func getCassandraBaseType(name string) Type {
 	}
 }
 
+// TODO: Cover with unit tests.
 // Parses long Java-style type definition to internal data structures.
 func getCassandraLongType(name string, protoVer byte, logger StdLogger) TypeInfo {
 	if strings.HasPrefix(name, SET_TYPE) {
 		return CollectionType{
 			NativeType: NewNativeType(protoVer, TypeSet),
-			Elem:       getCassandraLongType(strings.TrimPrefix(name[:len(name)-1], SET_TYPE+"("), protoVer, logger),
+			Elem:       getCassandraLongType(unwrapCompositeTypeDefinition(name, SET_TYPE, '('), protoVer, logger),
 		}
 	} else if strings.HasPrefix(name, LIST_TYPE) {
 		return CollectionType{
 			NativeType: NewNativeType(protoVer, TypeList),
-			Elem:       getCassandraLongType(strings.TrimPrefix(name[:len(name)-1], LIST_TYPE+"("), protoVer, logger),
+			Elem:       getCassandraLongType(unwrapCompositeTypeDefinition(name, LIST_TYPE, '('), protoVer, logger),
 		}
 	} else if strings.HasPrefix(name, MAP_TYPE) {
-		names := splitJavaCompositeTypes(strings.TrimPrefix(name[:len(name)-1], MAP_TYPE+"("))
+		names := splitJavaCompositeTypes(name, MAP_TYPE)
 		if len(names) != 2 {
 			logger.Printf("gocql: error parsing map type, it has %d subelements, expecting 2\n", len(names))
 			return NewNativeType(protoVer, TypeCustom)
@@ -188,7 +189,7 @@ func getCassandraLongType(name string, protoVer byte, logger StdLogger) TypeInfo
 			Elem:       getCassandraLongType(names[1], protoVer, logger),
 		}
 	} else if strings.HasPrefix(name, TUPLE_TYPE) {
-		names := splitJavaCompositeTypes(strings.TrimPrefix(name[:len(name)-1], TUPLE_TYPE+"("))
+		names := splitJavaCompositeTypes(name, TUPLE_TYPE)
 		types := make([]TypeInfo, len(names))
 
 		for i, name := range names {
@@ -200,7 +201,7 @@ func getCassandraLongType(name string, protoVer byte, logger StdLogger) TypeInfo
 			Elems:      types,
 		}
 	} else if strings.HasPrefix(name, UDT_TYPE) {
-		names := splitJavaCompositeTypes(strings.TrimPrefix(name[:len(name)-1], UDT_TYPE+"("))
+		names := splitJavaCompositeTypes(name, UDT_TYPE)
 		fields := make([]UDTField, len(names)-2)
 
 		for i := 2; i < len(names); i++ {
@@ -220,7 +221,7 @@ func getCassandraLongType(name string, protoVer byte, logger StdLogger) TypeInfo
 			Elements:   fields,
 		}
 	} else if strings.HasPrefix(name, VECTOR_TYPE) {
-		names := splitJavaCompositeTypes(strings.TrimPrefix(name[:len(name)-1], VECTOR_TYPE+"("))
+		names := splitJavaCompositeTypes(name, VECTOR_TYPE)
 		subType := getCassandraLongType(strings.TrimSpace(names[0]), protoVer, logger)
 		dim, err := strconv.Atoi(strings.TrimSpace(names[1]))
 		if err != nil {
@@ -245,19 +246,19 @@ func getCassandraLongType(name string, protoVer byte, logger StdLogger) TypeInfo
 // Parses short CQL type representation (e.g. map<text, text>) to internal data structures.
 func getCassandraType(name string, protoVer byte, logger StdLogger) TypeInfo {
 	if strings.HasPrefix(name, "frozen<") {
-		return getCassandraType(strings.TrimPrefix(name[:len(name)-1], "frozen<"), protoVer, logger)
+		return getCassandraType(unwrapCompositeTypeDefinition(name, "frozen", '<'), protoVer, logger)
 	} else if strings.HasPrefix(name, "set<") {
 		return CollectionType{
 			NativeType: NewNativeType(protoVer, TypeSet),
-			Elem:       getCassandraType(strings.TrimPrefix(name[:len(name)-1], "set<"), protoVer, logger),
+			Elem:       getCassandraType(unwrapCompositeTypeDefinition(name, "set", '<'), protoVer, logger),
 		}
 	} else if strings.HasPrefix(name, "list<") {
 		return CollectionType{
 			NativeType: NewNativeType(protoVer, TypeList),
-			Elem:       getCassandraType(strings.TrimPrefix(name[:len(name)-1], "list<"), protoVer, logger),
+			Elem:       getCassandraType(unwrapCompositeTypeDefinition(name, "list", '<'), protoVer, logger),
 		}
 	} else if strings.HasPrefix(name, "map<") {
-		names := splitCQLCompositeTypes(strings.TrimPrefix(name[:len(name)-1], "map<"))
+		names := splitCQLCompositeTypes(name, "map")
 		if len(names) != 2 {
 			logger.Printf("Error parsing map type, it has %d subelements, expecting 2\n", len(names))
 			return NewNativeType(protoVer, TypeCustom)
@@ -268,7 +269,7 @@ func getCassandraType(name string, protoVer byte, logger StdLogger) TypeInfo {
 			Elem:       getCassandraType(names[1], protoVer, logger),
 		}
 	} else if strings.HasPrefix(name, "tuple<") {
-		names := splitCQLCompositeTypes(strings.TrimPrefix(name[:len(name)-1], "tuple<"))
+		names := splitCQLCompositeTypes(name, "tuple")
 		types := make([]TypeInfo, len(names))
 
 		for i, name := range names {
@@ -280,7 +281,7 @@ func getCassandraType(name string, protoVer byte, logger StdLogger) TypeInfo {
 			Elems:      types,
 		}
 	} else if strings.HasPrefix(name, "vector<") {
-		names := splitCQLCompositeTypes(strings.TrimPrefix(name[:len(name)-1], "vector<"))
+		names := splitCQLCompositeTypes(name, "vector")
 		subType := getCassandraType(strings.TrimSpace(names[0]), protoVer, logger)
 		dim, _ := strconv.Atoi(strings.TrimSpace(names[1]))
 
@@ -297,17 +298,22 @@ func getCassandraType(name string, protoVer byte, logger StdLogger) TypeInfo {
 	}
 }
 
-func splitCQLCompositeTypes(name string) []string {
-	return splitCompositeTypes(name, '<', '>')
+func splitCQLCompositeTypes(name string, typeName string) []string {
+	return splitCompositeTypes(name, typeName, '<', '>')
 }
 
-func splitJavaCompositeTypes(name string) []string {
-	return splitCompositeTypes(name, '(', ')')
+func splitJavaCompositeTypes(name string, typeName string) []string {
+	return splitCompositeTypes(name, typeName, '(', ')')
 }
 
-func splitCompositeTypes(name string, typeOpen int32, typeClose int32) []string {
-	if !strings.Contains(name, string(typeOpen)) {
-		parts := strings.Split(name, ",")
+func unwrapCompositeTypeDefinition(name string, typeName string, typeOpen int32) string {
+	return strings.TrimPrefix(name[:len(name)-1], typeName+string(typeOpen))
+}
+
+func splitCompositeTypes(name string, typeName string, typeOpen int32, typeClose int32) []string {
+	def := unwrapCompositeTypeDefinition(name, typeName, typeOpen)
+	if !strings.Contains(def, string(typeOpen)) {
+		parts := strings.Split(def, ",")
 		for i := range parts {
 			parts[i] = strings.TrimSpace(parts[i])
 		}
@@ -316,7 +322,7 @@ func splitCompositeTypes(name string, typeOpen int32, typeClose int32) []string 
 	var parts []string
 	lessCount := 0
 	segment := ""
-	for _, char := range name {
+	for _, char := range def {
 		if char == ',' && lessCount == 0 {
 			if segment != "" {
 				parts = append(parts, strings.TrimSpace(segment))

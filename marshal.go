@@ -173,9 +173,8 @@ func Marshal(info TypeInfo, value interface{}) ([]byte, error) {
 	case TypeDuration:
 		return marshalDuration(info, value)
 	case TypeCustom:
-		switch info.(type) {
-		case VectorType:
-			return marshalVector(info.(VectorType), value)
+		if vector, ok := info.(VectorType); ok {
+			return marshalVector(vector, value)
 		}
 	}
 
@@ -282,9 +281,8 @@ func Unmarshal(info TypeInfo, data []byte, value interface{}) error {
 	case TypeDuration:
 		return unmarshalDuration(info, data, value)
 	case TypeCustom:
-		switch info.(type) {
-		case VectorType:
-			return unmarshalVector(info.(VectorType), data, value)
+		if vector, ok := info.(VectorType); ok {
+			return unmarshalVector(vector, data, value)
 		}
 	}
 
