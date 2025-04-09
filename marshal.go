@@ -1758,7 +1758,7 @@ func marshalVector(info VectorType, value interface{}) ([]byte, error) {
 		}
 		return buf.Bytes(), nil
 	}
-	return nil, marshalErrorf("can not marshal %T into %s", value, info)
+	return nil, marshalErrorf("can not marshal %T into %s. Accepted types: slice, array.", value, info)
 }
 
 func unmarshalVector(info VectorType, data []byte, value interface{}) error {
@@ -1792,7 +1792,7 @@ func unmarshalVector(info VectorType, data []byte, value interface{}) error {
 		for i := 0; i < info.Dimensions; i++ {
 			offset := 0
 			if isVectorVariableLengthType(info.SubType) {
-				m, p, err := readUnsignedVint(data, 0)
+				m, p, err := readUnsignedVInt(data, 0)
 				if err != nil {
 					return err
 				}
@@ -1817,7 +1817,7 @@ func unmarshalVector(info VectorType, data []byte, value interface{}) error {
 		}
 		return nil
 	}
-	return unmarshalErrorf("can not unmarshal %s into %T", info, value)
+	return unmarshalErrorf("can not unmarshal %s into %T. Accepted types: slice, array.", info, value)
 }
 
 func isVectorVariableLengthType(elemType TypeInfo) bool {
@@ -1862,7 +1862,7 @@ func writeUnsignedVInt(buf *bytes.Buffer, v uint64) {
 	buf.Write(tmp)
 }
 
-func readUnsignedVint(data []byte, start int) (uint64, int, error) {
+func readUnsignedVInt(data []byte, start int) (uint64, int, error) {
 	if len(data) <= start {
 		return 0, 0, errors.New("unexpected eof")
 	}

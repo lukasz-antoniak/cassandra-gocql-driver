@@ -2510,7 +2510,7 @@ func TestReadCollectionSize(t *testing.T) {
 	}
 }
 
-func TestReadUnsignedVint(t *testing.T) {
+func TestReadUnsignedVInt(t *testing.T) {
 	tests := []struct {
 		decodedInt  uint64
 		encodedVint []byte
@@ -2530,7 +2530,7 @@ func TestReadUnsignedVint(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%d", test.decodedInt), func(t *testing.T) {
-			actual, _, err := readUnsignedVint(test.encodedVint, 0)
+			actual, _, err := readUnsignedVInt(test.encodedVint, 0)
 			if err != nil {
 				t.Fatalf("Expected no error, got %v", err)
 			}
