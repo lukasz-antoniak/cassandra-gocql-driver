@@ -1820,19 +1820,17 @@ func unmarshalVector(info VectorType, data []byte, value interface{}) error {
 	return unmarshalErrorf("can not unmarshal %s into %T. Accepted types: slice, array.", info, value)
 }
 
+// isVectorVariableLengthType determines if a type requires explicit length serialization within a vector.
+// Variable-length types need their length encoded before the actual data to allow proper deserialization.
+// Fixed-length types, on the other hand, don't require this kind of length prefix.
 func isVectorVariableLengthType(elemType TypeInfo) bool {
 	switch elemType.Type() {
-	case TypeVarchar, TypeAscii, TypeBlob, TypeText:
-		return true
-	case TypeCounter:
-		return true
-	case TypeDuration, TypeDate, TypeTime:
-		return true
-	case TypeDecimal, TypeSmallInt, TypeTinyInt, TypeVarint:
-		return true
-	case TypeInet:
-		return true
-	case TypeList, TypeSet, TypeMap, TypeUDT, TypeTuple:
+	case TypeVarchar, TypeAscii, TypeBlob, TypeText,
+		TypeCounter,
+		TypeDuration, TypeDate, TypeTime,
+		TypeDecimal, TypeSmallInt, TypeTinyInt, TypeVarint,
+		TypeInet,
+		TypeList, TypeSet, TypeMap, TypeUDT, TypeTuple:
 		return true
 	case TypeCustom:
 		switch elemType.(type) {
