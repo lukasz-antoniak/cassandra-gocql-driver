@@ -1833,9 +1833,7 @@ func isVectorVariableLengthType(elemType TypeInfo) bool {
 		TypeList, TypeSet, TypeMap, TypeUDT, TypeTuple:
 		return true
 	case TypeCustom:
-		switch elemType.(type) {
-		case VectorType:
-			vecType := elemType.(VectorType)
+		if vecType, ok := elemType.(VectorType); ok {
 			return isVectorVariableLengthType(vecType.SubType)
 		}
 		return true
