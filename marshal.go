@@ -1792,7 +1792,7 @@ func unmarshalVector(info VectorType, data []byte, value interface{}) error {
 		for i := 0; i < info.Dimensions; i++ {
 			offset := 0
 			if isVectorVariableLengthType(info.SubType) {
-				m, p, err := readUnsignedVInt(data, 0)
+				m, p, err := readUnsignedVInt(data)
 				if err != nil {
 					return err
 				}
@@ -1858,24 +1858,24 @@ func writeUnsignedVInt(buf *bytes.Buffer, v uint64) {
 	buf.Write(tmp)
 }
 
-func readUnsignedVInt(data []byte, start int) (uint64, int, error) {
-	if len(data) <= start {
+func readUnsignedVInt(data []byte) (uint64, int, error) {
+	if len(data) <= 0 {
 		return 0, 0, errors.New("unexpected eof")
 	}
-	firstByte := data[start]
+	firstByte := data[0]
 	if firstByte&0x80 == 0 {
-		return uint64(firstByte), start + 1, nil
+		return uint64(firstByte), 1, nil
 	}
 	numBytes := bits.LeadingZeros32(uint32(^firstByte)) - 24
 	ret := uint64(firstByte & (0xff >> uint(numBytes)))
-	if len(data) < start+numBytes+1 {
-		return 0, 0, fmt.Errorf("data expect to have %d bytes, but it has only %d", start+numBytes+1, len(data))
+	if len(data) < numBytes+1 {
+		return 0, 0, fmt.Errorf("data expect to have %d bytes, but it has only %d", numBytes+1, len(data))
 	}
-	for i := start; i < start+numBytes; i++ {
+	for i := 0; i < numBytes; i++ {
 		ret <<= 8
 		ret |= uint64(data[i+1] & 0xff)
 	}
-	return ret, start + numBytes + 1, nil
+	return ret, numBytes + 1, nil
 }
 
 func computeUnsignedVIntSize(v uint64) int {
