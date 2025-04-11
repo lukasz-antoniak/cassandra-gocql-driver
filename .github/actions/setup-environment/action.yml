@@ -32,7 +32,6 @@ runs:
         sdk default java 11.0.24-zulu
         sdk use java 11.0.24-zulu
 
-        export CASSANDRA_USE_JDK11=true
         echo "JAVA11_HOME=$JAVA_HOME_11_X64" >> $GITHUB_ENV
         echo "JAVA17_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
         echo "JAVA_HOME=$JAVA_HOME_11_X64" >> $GITHUB_ENV

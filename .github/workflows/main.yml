@@ -100,6 +100,7 @@ jobs:
           ccm create test -v $VERSION -n 3 -d --vnodes --jvm_arg="-Xmx256m -XX:NewSize=100m"
           ccm updateconf "${conf[@]}"
 
+          export CASSANDRA_USE_JDK11=true
           export JVM_EXTRA_OPTS=" -Dcassandra.test.fail_writes_ks=test -Dcassandra.custom_query_handler_class=org.apache.cassandra.cql3.CustomPayloadMirroringQueryHandler"
 
           ccm start --wait-for-binary-proto --verbose
