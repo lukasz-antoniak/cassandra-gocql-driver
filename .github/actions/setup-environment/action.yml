@@ -29,12 +29,12 @@ runs:
         sdk install java 11.0.24-zulu
         sdk install java 17.0.12-zulu
 
-        sdk default java 17.0.12-zulu
-        sdk use java 17.0.12-zulu
+        sdk default java 11.0.24-zulu
+        sdk use java 11.0.24-zulu
 
         echo "JAVA11_HOME=$JAVA_HOME_11_X64" >> $GITHUB_ENV
         echo "JAVA17_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
-        echo "JAVA_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
+        echo "JAVA_HOME=$JAVA_HOME_11_X64" >> $GITHUB_ENV
         echo "PATH=$PATH" >> $GITHUB_ENV
 
     - name: Install CCM
